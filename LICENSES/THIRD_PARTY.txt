@@ -1,0 +1,51 @@
+THIRD-PARTY CODE
+================
+
+This repository contains code from the projects below. Their license texts are in this
+directory, and their original copyright headers are left intact in the source files.
+
+
+espnet -- under SepTDA/espnet/ and SepTDA/espnet2/
+-------------------------------------------------
+
+  Upstream:  https://github.com/espnet/espnet
+  License:   Apache License 2.0  (see espnet-Apache-2.0.txt)
+  Copyright: Johns Hopkins University (Shinji Watanabe, Xuankai Chang),
+             Kyoto University (Hirofumi Inaguma), Shigeki Karita,
+             and the ESPnet contributors.
+
+SepTDA/ is built on espnet. The espnet/ and espnet2/ trees, along with the recipe
+scaffolding under SepTDA/egs2/, are espnet source -- modified in places, but espnet's
+work. Per-file "# Copyright ..." headers are preserved.
+
+
+SR_CorrNet_SS -- patches under 6-speaker/SR_CorrNet_SS/
+------------------------------------------------------
+
+  Upstream:  https://github.com/dmlguq456/SR_CorrNet_SS
+  License:   MIT  (see SR_CorrNet_SS-MIT.txt)
+  Copyright: (c) 2026 Uihyeop Shin
+
+The upstream repository is NOT vendored here. What 6-speaker/SR_CorrNet_SS/ contains is
+only the four files authored for the 6-speaker work, laid out at their upstream-relative
+paths so they can be copied over a fresh clone:
+
+  sr_corrnet/models/SR_CorrNet_SS/engine.py                  modified upstream file
+  sr_corrnet/models/SR_CorrNet_SS/loss.py                    modified upstream file
+  sr_corrnet/models/SR_CorrNet_SS/configs/1ch_var_2_6spk.yaml    new
+  sr_corrnet/models/SR_CorrNet_SS/configs/local_test_6spk.yaml   new
+
+engine.py and loss.py are derivative works of the MIT-licensed upstream and remain under
+that license. The two configs are new work.
+
+voice-seperation/ also expects an SR_CorrNet_SS clone at voice-seperation/SR_CorrNet_SS/;
+it is not committed. Clone it from the upstream URL above.
+
+
+Corpora
+-------
+
+No corpus data is committed. WSJ0 (LDC93S6A) is LDC-licensed and cannot be redistributed;
+obtain it through your own LDC license. LibriSpeech is available from https://openslr.org/12.
+Everything WSJ0-derived -- mixtures, references, separated estimates -- is excluded for the
+same reason. The committed .npz caches contain metrics only, no audio.

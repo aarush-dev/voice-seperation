@@ -1,0 +1,23 @@
+  N=2 25/100 SI-SNRi so far 22.88 dB  ETA 0.6 min
+  N=2 50/100 SI-SNRi so far 23.05 dB  ETA 0.4 min
+  N=2 75/100 SI-SNRi so far 23.28 dB  ETA 0.2 min
+N=2  n= 100  SI-SNRi= 23.39 dB (sd 1.49)  count-acc=100.0%  RTF=0.0501
+  N=3 25/100 SI-SNRi so far 22.95 dB  ETA 1.0 min
+  N=3 50/100 SI-SNRi so far 23.53 dB  ETA 0.7 min
+  N=3 75/100 SI-SNRi so far 23.65 dB  ETA 0.3 min
+N=3  n= 100  SI-SNRi= 23.84 dB (sd 1.51)  count-acc=100.0%  RTF=0.0740
+  N=4 25/100 SI-SNRi so far 21.68 dB  ETA 1.1 min
+  N=4 50/100 SI-SNRi so far 22.07 dB  ETA 0.7 min
+  N=4 75/100 SI-SNRi so far 21.99 dB  ETA 0.4 min
+N=4  n= 100  SI-SNRi= 22.20 dB (sd 3.64)  count-acc= 98.0%  RTF=0.0846
+  N=5 25/100 SI-SNRi so far 19.22 dB  ETA 1.4 min
+  N=5 50/100 SI-SNRi so far 20.05 dB  ETA 0.9 min
+  N=5 75/100 SI-SNRi so far 20.30 dB  ETA 0.5 min
+N=5  n= 100  SI-SNRi= 20.57 dB (sd 3.96)  count-acc= 98.0%  RTF=0.0976
+
+=== SR-CorrNet var-2-5spk on WSJ0-mix tt (OFFICIAL, comparable to published) ===
+ N  mixes  SI-SNRi (dB)  count acc      RTF
+ 2    100         23.39     100.0%   0.0501
+ 3    100         23.84     100.0%   0.0740
+ 4    100         22.20      98.0%   0.0846
+ 5    100         20.57      98.0%   0.0976

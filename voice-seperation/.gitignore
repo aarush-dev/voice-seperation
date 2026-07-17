@@ -1,0 +1,37 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Corpora — huge, and WSJ0 is LDC-licensed (not ours to redistribute).
+# data/wsj0_kmix is 4.2 GB and expensive to rebuild; see HANDOFF.md. Never delete
+# it locally just because it is ignored here.
+# ─────────────────────────────────────────────────────────────────────────────
+data/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Vendored third-party clones. Each has its own upstream git history; they are
+# ignored rather than committed so this repo holds only our own work.
+#   SR_CorrNet_SS/  -> github.com/dmlguq456/SR_CorrNet_SS (+ the .venv, multi-GB)
+#   tools/pywsj0-mix -> github.com/mpariente/pywsj0-mix
+# README.md's Setup section says how to re-clone them.
+# ─────────────────────────────────────────────────────────────────────────────
+SR_CorrNet_SS/
+tools/pywsj0-mix/
+tools/ffmpeg-*/
+tools/ffmpeg.zip
+
+# ─────────────────────────────────────────────────────────────────────────────
+# WSJ0-derived audio. Mixtures and references ARE WSJ0 speech; the estimates are
+# derived works. Redistributing any of it would republish LDC93S6A.
+# Regenerate with save_separations.py once data/ is in place.
+# ─────────────────────────────────────────────────────────────────────────────
+separated_wsj0/
+demo_out/
+demo_out_auto/
+artifact.html
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+
+# Run logs — noisy, and every result worth keeping is already in results_*.md
+*.log

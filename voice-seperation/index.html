@@ -1,0 +1,1029 @@
+<!doctype html>
+<html lang="en" data-palette="#3987e5,#008300,#d55181,#c98500,#199e70">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SR-CorrNet — monaural separation of 3+ concurrent speakers</title>
+<style>
+:root{
+  color-scheme: dark;
+  /* chart + UI roles (dataviz reference palette, dark steps, validated against --surface-1) */
+  --plane:#0d0d0d; --surface-1:#14161a; --surface-2:#1b1e24; --surface-3:#22262e;
+  --ink:#ffffff; --ink-2:#c3c2b7; --muted:#898781;
+  --grid:#2c2c2a; --axis:#383835; --hair:rgba(255,255,255,.10);
+  --s1:#3987e5; --s2:#008300; --s3:#d55181; --s4:#c98500; --s5:#199e70;
+  --pos:#3987e5; --neg:#e66767; --good:#0ca30c; --warn:#fab219; --crit:#d03b3b;
+  --mix:#898781;
+  --radius:10px;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--plane);color:var(--ink);font-family:var(--sans);
+  font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+h1,h2,h3{line-height:1.2;margin:0}
+a{color:var(--s1)}
+code,.mono{font-family:var(--mono);font-size:.88em}
+.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+.muted{color:var(--muted)}
+.ink2{color:var(--ink-2)}
+
+/* ---------- nav ---------- */
+nav{position:sticky;top:0;z-index:50;background:rgba(13,13,13,.82);
+  backdrop-filter:blur(12px);border-bottom:1px solid var(--hair)}
+nav .wrap{display:flex;align-items:center;gap:22px;height:54px}
+nav .brand{font-weight:650;letter-spacing:-.01em;margin-right:auto;white-space:nowrap}
+nav a{color:var(--ink-2);text-decoration:none;font-size:13.5px;white-space:nowrap}
+nav a:hover{color:var(--ink)}
+nav .links{display:flex;gap:22px}
+/* The links cannot shrink, so below this width they would set a floor on the body and make
+   the whole page scroll sideways. Drop them rather than let them widen everything. */
+@media(max-width:860px){nav .links{display:none}}
+
+/* ---------- hero ---------- */
+header{padding:72px 0 40px;border-bottom:1px solid var(--hair);
+  background:radial-gradient(1000px 400px at 20% -10%,rgba(57,135,229,.13),transparent 70%)}
+.eyebrow{color:var(--s1);font-size:12.5px;font-weight:600;letter-spacing:.09em;
+  text-transform:uppercase;margin-bottom:14px}
+h1{font-size:clamp(30px,4.6vw,48px);letter-spacing:-.025em;font-weight:680;max-width:20ch}
+.lede{margin:18px 0 0;font-size:18px;color:var(--ink-2);max-width:62ch}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:26px}
+.chip{border:1px solid var(--hair);background:var(--surface-1);border-radius:99px;
+  padding:5px 12px;font-size:12.5px;color:var(--ink-2)}
+.chip b{color:var(--ink);font-weight:600}
+
+/* ---------- stat tiles ---------- */
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:34px}
+@media(max-width:760px){.tiles{grid-template-columns:repeat(2,1fr)}}
+.tile{background:var(--surface-1);border:1px solid var(--hair);border-radius:var(--radius);padding:16px 18px}
+.tile.baseline{background:none;border-style:dashed;opacity:.62}
+.tile.baseline .v{font-size:22px;color:var(--ink-2)}
+.tile .k{font-size:12px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+.tile .v{font-size:30px;font-weight:650;letter-spacing:-.02em;margin-top:6px}
+.tile .v small{font-size:14px;font-weight:500;color:var(--muted);margin-left:3px}
+.tile .sub{font-size:12.5px;color:var(--muted);margin-top:4px}
+
+/* ---------- sections ---------- */
+section{padding:64px 0;border-bottom:1px solid var(--hair)}
+.sec-head{margin-bottom:26px}
+.sec-head h2{font-size:26px;letter-spacing:-.02em;font-weight:650}
+.sec-head p{margin:10px 0 0;color:var(--ink-2);max-width:74ch}
+
+/* ---------- player ---------- */
+.controls{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-end;margin-bottom:20px}
+.ctl-label{font-size:11.5px;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.07em;margin-bottom:7px}
+.seg{display:inline-flex;background:var(--surface-1);border:1px solid var(--hair);
+  border-radius:8px;padding:3px;gap:3px}
+.seg button{background:none;border:0;color:var(--ink-2);font:inherit;font-size:13px;
+  padding:6px 13px;border-radius:6px;cursor:pointer;white-space:nowrap}
+.seg button:hover{color:var(--ink)}
+.seg button[aria-pressed=true]{background:var(--surface-3);color:var(--ink);font-weight:550}
+.seg button.baseline{color:var(--muted);font-size:12px}
+.examples{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:22px}
+.ex{background:var(--surface-1);border:1px solid var(--hair);border-radius:7px;
+  padding:7px 11px;cursor:pointer;font-size:12.5px;color:var(--ink-2);
+  display:flex;align-items:center;gap:8px;font-family:var(--mono)}
+.ex:hover{border-color:#4a4f58;color:var(--ink)}
+.ex[aria-pressed=true]{border-color:var(--s1);background:rgba(57,135,229,.12);color:var(--ink)}
+.ex .db{color:var(--muted);font-size:11.5px}
+.ex[aria-pressed=true] .db{color:var(--s1)}
+
+.stage{background:var(--surface-1);border:1px solid var(--hair);border-radius:14px;overflow:hidden}
+.stage-top{padding:14px 18px;border-bottom:1px solid var(--hair);display:flex;
+  align-items:center;gap:14px;flex-wrap:wrap}
+.stage-top .key{font-family:var(--mono);font-size:11.5px;color:var(--muted);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1 1 120px}
+.badge{border-radius:99px;padding:3px 9px;font-size:11.5px;font-weight:600;
+  border:1px solid var(--hair);white-space:nowrap}
+.badge.dom-in{color:var(--good);border-color:rgba(12,163,12,.4);background:rgba(12,163,12,.1)}
+.badge.dom-out{color:var(--warn);border-color:rgba(250,178,25,.35);background:rgba(250,178,25,.1)}
+
+.track{display:grid;grid-template-columns:150px 1fr auto;gap:14px;align-items:center;
+  padding:13px 18px;border-bottom:1px solid var(--hair)}
+.track:last-child{border-bottom:0}
+.track.mixrow{background:var(--surface-2)}
+@media(max-width:760px){.track{grid-template-columns:1fr;gap:9px}}
+.tname{display:flex;align-items:center;gap:9px;font-size:13.5px;font-weight:550}
+.dot{width:9px;height:9px;border-radius:99px;flex:none}
+.play{width:30px;height:30px;border-radius:99px;border:1px solid var(--hair);
+  background:var(--surface-3);color:var(--ink);cursor:pointer;flex:none;
+  display:grid;place-items:center;padding:0}
+.play:hover{border-color:#5b616c}
+.play svg{width:11px;height:11px;fill:currentColor}
+canvas.wave{width:100%;height:52px;display:block;cursor:pointer;border-radius:4px}
+.tmeta{display:flex;align-items:center;gap:10px;justify-content:flex-end}
+.ab{display:inline-flex;background:var(--surface-3);border-radius:6px;padding:2px;gap:2px}
+.ab button{background:none;border:0;color:var(--muted);font:inherit;font-size:11.5px;
+  padding:4px 9px;border-radius:4px;cursor:pointer}
+.ab button[aria-pressed=true]{background:var(--surface-1);color:var(--ink);font-weight:550}
+.db-badge{font-family:var(--mono);font-size:12px;color:var(--ink-2);
+  min-width:64px;text-align:right;font-variant-numeric:tabular-nums}
+.hint{font-size:13px;color:var(--muted);margin-top:14px}
+kbd{background:var(--surface-3);border:1px solid var(--hair);border-radius:4px;
+  padding:1px 5px;font-family:var(--mono);font-size:11px}
+
+/* ---------- tables ---------- */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--hair);border-radius:var(--radius);
+  background:var(--surface-1)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{padding:9px 14px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--grid)}
+th:first-child,td:first-child{text-align:left}
+thead th{color:var(--muted);font-weight:550;font-size:11.5px;text-transform:uppercase;
+  letter-spacing:.05em;background:var(--surface-2)}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--surface-2)}
+td.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.win{color:var(--good);font-weight:600}
+.lose{color:var(--neg);font-weight:600}
+.tag{font-size:10.5px;border-radius:4px;padding:2px 6px;border:1px solid var(--hair);
+  color:var(--muted);margin-left:7px;font-family:var(--sans)}
+.tag.ship{color:var(--good);border-color:rgba(12,163,12,.4);background:rgba(12,163,12,.1)}
+
+/* ---------- charts ---------- */
+.chart{background:var(--surface-1);border:1px solid var(--hair);border-radius:var(--radius);
+  padding:18px}
+.chart h3{font-size:14.5px;font-weight:600;margin-bottom:2px}
+.chart .csub{font-size:12.5px;color:var(--muted);margin-bottom:14px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;font-size:12.5px;color:var(--ink-2)}
+.legend span{display:flex;align-items:center;gap:6px}
+.legend i{width:10px;height:10px;border-radius:3px;display:block}
+svg{display:block;width:100%;height:auto;overflow:visible}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:900px){.grid2{grid-template-columns:1fr}}
+#tip{position:fixed;pointer-events:none;opacity:0;transition:opacity .1s;z-index:99;
+  background:var(--surface-3);border:1px solid var(--hair);border-radius:7px;
+  padding:7px 10px;font-size:12.5px;box-shadow:0 8px 24px rgba(0,0,0,.5);max-width:280px}
+#tip b{font-family:var(--mono)}
+
+/* ---------- callouts ---------- */
+.note{border-left:3px solid var(--s1);background:var(--surface-1);border-radius:0 8px 8px 0;
+  padding:14px 18px;margin:20px 0;font-size:14px;color:var(--ink-2)}
+.note.warn{border-left-color:var(--warn)}
+.note.crit{border-left-color:var(--crit)}
+.note b{color:var(--ink)}
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:900px){.cards{grid-template-columns:1fr}}
+.card{background:var(--surface-1);border:1px solid var(--hair);border-radius:var(--radius);padding:18px}
+.card h3{font-size:14.5px;font-weight:600;margin-bottom:9px;display:flex;align-items:center;gap:8px}
+.card ul{margin:0;padding-left:18px;color:var(--ink-2);font-size:13.5px}
+.card li{margin-bottom:6px}
+.ico{width:16px;height:16px;flex:none}
+pre{background:var(--surface-1);border:1px solid var(--hair);border-radius:var(--radius);
+  padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:12.5px;
+  color:var(--ink-2);line-height:1.65}
+pre .cm{color:var(--muted)}
+footer{padding:40px 0 64px;color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+
+<nav><div class="wrap">
+  <span class="brand">SR-CorrNet <span class="muted" style="font-weight:400">· 3+ speaker separation</span></span>
+  <span class="links">
+    <a href="#listen">Listen</a><a href="#results">Results</a><a href="#tier1">Pipeline</a>
+    <a href="#bleed">Error analysis</a><a href="#counting">Counting</a><a href="#method">Method</a>
+  </span>
+</div></nav>
+
+<header><div class="wrap">
+  <div class="eyebrow">Monaural separation · 3, 4 and 5 concurrent speakers</div>
+  <h1>Pulling five voices out of one microphone.</h1>
+  <p class="lede">Two-speaker separation is a solved problem. <b>Three or more</b> is where it gets
+    hard — and one checkpoint handles 3, 4 and 5 people talking at once over a
+    <b>single channel</b>, infers how many there are, and holds published state-of-the-art at
+    every count. No training, no per-count models.</p>
+  <div class="chips" id="chips"></div>
+  <div class="tiles" id="tiles"></div>
+  <p class="hint">SI-SNRi on official WSJ0-{3,4,5}mix <code>tt</code>, 100 mixtures per count,
+    speaker count known. Higher is better; ~20 dB means the interfering talkers are ~100× quieter
+    than the target. <b>2 speakers is shown throughout as the baseline</b> — it is the easy case,
+    and it is not what this is for.</p>
+</div></header>
+
+<section id="listen"><div class="wrap">
+  <div class="sec-head">
+    <h2>Listen to it work — start at 4 or 5</h2>
+    <p>Play the <b>mixture</b> first. At three voices you can just about follow one; at five it is
+      an unintelligible wall, which is the point. Then play each separated stream, and use
+      <b>Separated / Reference</b> to A/B a stream against the ground-truth recording of that
+      speaker at the same instant. All audio is 8 kHz mono, the model's native rate.</p>
+  </div>
+
+  <div class="controls">
+    <div>
+      <div class="ctl-label">Corpus</div>
+      <div class="seg" id="ds-seg"></div>
+    </div>
+    <div>
+      <div class="ctl-label">Speakers in the mixture</div>
+      <div class="seg" id="n-seg"></div>
+    </div>
+  </div>
+
+  <div class="examples" id="examples"></div>
+  <div class="stage" id="stage"></div>
+  <p class="hint"><kbd>Space</kbd> play/pause · click any waveform to seek · the A/B toggle keeps
+    its position, so you can flip mid-word. Per-stream dB is that speaker's SI-SNRi, scored with
+    the authors' own <code>PIT_SISNRi</code>.</p>
+</div></section>
+
+<section id="results"><div class="wrap">
+  <div class="sec-head">
+    <h2>Results</h2>
+    <p>Official WSJ0-mix <code>tt</code>, generated from real WSJ0 (LDC93S6A) with the canonical
+      <code>pywsj0-mix</code> metadata — so these are directly comparable to published numbers.
+      SepTDA is the state of the art it is measured against; SepTDA ships no weights, this does.</p>
+  </div>
+  <div class="grid2">
+    <div class="chart">
+      <h3>SI-SNRi vs. published SOTA</h3>
+      <div class="csub">Higher is better. Speaker count known to both.</div>
+      <div class="legend"><span><i style="background:var(--s1)"></i>SR-CorrNet (measured here)</span>
+        <span><i style="background:var(--s2)"></i>SepTDA (paper)</span></div>
+      <div id="chart-headline"></div>
+    </div>
+    <div class="chart">
+      <h3>Counting is free — no cliff at 4 speakers</h3>
+      <div class="csub">SepTDA must be told N; this model infers it and barely pays for it.</div>
+      <div class="legend"><span><i style="background:var(--s1)"></i>SR-CorrNet, count inferred</span>
+        <span><i style="background:var(--s2)"></i>SepTDA, count unknown (paper)</span></div>
+      <div id="chart-unknown"></div>
+    </div>
+  </div>
+  <div class="tbl-wrap" style="margin-top:16px"><table id="tbl-headline"></table></div>
+  <div class="note"><b>There is no cliff at 3+.</b> This is the result that matters here: going
+    from 2 to 5 speakers costs only ~2.8 dB, and 3 speakers actually scores <i>higher</i> than 2
+    (23.84 vs 23.39). The hard cases degrade gracefully rather than falling apart, and the
+    built-in counter still gets 98–100% of them right in domain, so you do not need to be told how
+    many people are talking. RTF ~0.05–0.10 is 10–20× faster than realtime on one RTX 3080 Ti.</div>
+
+  <h3 style="margin:40px 0 6px;font-size:17px">Out of domain: a corpus the model has never heard</h3>
+  <p class="ink2" style="margin:0 0 18px;max-width:74ch;font-size:14px">The same checkpoint on
+    LibriSpeech dev-clean mixtures, 500 per count, speaker count known. It was trained on WSJ0
+    read speech, so this is the generalization test — and the number to quote if the target audio
+    is not WSJ0-like.</p>
+  <div class="grid2">
+    <div class="chart">
+      <h3>In domain vs. out of domain</h3>
+      <div class="csub">Same model, same metric, different corpus. The gap is the corpus, not a defect.</div>
+      <div class="legend"><span><i style="background:var(--s1)"></i>WSJ0-mix (trained on)</span>
+        <span><i style="background:var(--s4)"></i>LibriSpeech dev-clean (never seen)</span></div>
+      <div id="chart-oob"></div>
+    </div>
+    <div class="tbl-wrap"><table id="tbl-oob"></table></div>
+  </div>
+  <div class="note warn"><b>Do not quote these as if they were in-domain.</b> ~18 dB out of domain
+    is still roughly twice MultiDecoderDPRNN's <i>in-domain</i> 9.3 dB at 4 speakers, so the model
+    generalizes well — but reading the out-of-domain 18.61 dB as a 3-speaker separation deficit is
+    exactly the false conclusion this project already made once. In domain, 3 speakers scores
+    23.84 dB and matches the paper.</div>
+</div></section>
+
+<section id="tier1"><div class="wrap">
+  <div class="sec-head">
+    <h2>The pipeline, judged at 3+ speakers</h2>
+    <p>The shipping pipeline's headline is <b>+1.00 dB — but all of it is at 2 speakers</b>. Read
+      at 3, 4 and 5 the story inverts, and it is worth being blunt about that. Every comparison
+      below is <b>paired on identical mixtures</b>, which cancels per-mixture difficulty and
+      resolves ~±0.03 dB instead of ~±0.4 dB.</p>
+  </div>
+  <div class="note crit"><b>What the shipped wins are worth at 3+: almost nothing.</b> The routing
+    win applies <i>only</i> at N=2 — the one specialized checkpoint that covers 3 speakers
+    (<code>var-2-3spk</code>) <b>loses 1.91 dB</b>, so at 3+ there is nothing to route to. Mixture
+    consistency decays to <b>+0.19 / +0.08 / +0.04</b> at 3/4/5. Added up, the entire shipped
+    pipeline is worth <b>~0.1 dB</b> where this project actually operates. The lever that does
+    grow with speaker count — offset ensembling — is the one deliberately left out.</div>
+  <div class="grid2">
+    <div class="chart">
+      <h3>Checkpoint routing — nothing to route to at 3+</h3>
+      <div class="csub">Paired Δ vs the general checkpoint, 95% CI. Positive = challenger wins.
+        The 2-speaker rows are dimmed: they are why the shipped rule exists, but they do not
+        apply here.</div>
+      <div id="chart-routing"></div>
+    </div>
+    <div class="chart">
+      <h3>Mixture consistency — free, and decays with N</h3>
+      <div class="csub">Paired Δ from re-projecting streams onto the mixture. Same forward pass.</div>
+      <div class="legend"><span><i style="background:var(--s1)"></i>WSJ0-mix (in domain)</span>
+        <span><i style="background:var(--s4)"></i>LibriSpeech (out of domain)</span></div>
+      <div id="chart-mc"></div>
+    </div>
+  </div>
+  <div class="tbl-wrap" style="margin-top:16px"><table id="tbl-routing"></table></div>
+  <div class="note crit"><b>The trap that makes this work.</b> The model is trained with a
+    scale-invariant loss, so its output gain is arbitrary: raw streams are ~87× too loud and
+    <b>polarity-inverted</b> (best-fit gain ≈ −0.011). The textbook consistency formula
+    <code>s += (y − Σs)/N</code> is therefore wrong as written — the residual annihilates the
+    estimates. And SI-SNR, being scale-invariant, reads the wreckage as an ordinary regression
+    rather than a bug. The gain is fixed by least squares against the mixture first.</div>
+  <h3 style="margin:40px 0 6px;font-size:17px">Offset ensembling — the only lever that grows with
+    speaker count</h3>
+  <p class="ink2" style="margin:0 0 18px;max-width:74ch;font-size:14px">Run the model at 4 input
+    offsets and average the streams (sign- and permutation-matched first, or the passes cancel).
+    The question is not "does it help" but <b>"does it help on top of mixture consistency, which
+    is free?"</b> At 2 speakers: a flat no. <b>At 3/4/5 it buys +0.21 / +0.39 / +0.44 dB</b> — and
+    unlike everything else on this page, it gets <i>better</i> as the problem gets harder. It
+    costs 4× inference, which at RTF 0.07–0.10 still leaves ~3× realtime.</p>
+  <div class="grid2">
+    <div class="chart">
+      <h3>Ensembling and mixture consistency are mirror images</h3>
+      <div class="csub">Paired Δ over a single pass. MC does the work at N=2; ensembling at N=5.</div>
+      <div class="legend"><span><i style="background:var(--s1)"></i>Mixture consistency (free)</span>
+        <span><i style="background:var(--s2)"></i>Ensembling alone (4× inference)</span>
+        <span><i style="background:var(--s3)"></i>Both stacked</span></div>
+      <div id="chart-ens"></div>
+    </div>
+    <div class="chart">
+      <h3>What 4× inference actually buys, over free MC</h3>
+      <div class="csub">Δ(ens+MC) − Δ(MC alone). This is the only column that decides it.</div>
+      <div id="chart-ensover"></div>
+    </div>
+  </div>
+  <div class="tbl-wrap" style="margin-top:16px"><table id="tbl-ens"></table></div>
+  <p class="hint">Ensembling's gain <b>grows</b> with N (+0.04 → +0.49) while mixture consistency's
+    <b>shrinks</b> (+0.42 → +0.04) — they are mirror images. That is consistent with the error
+    being artifact-type (see below): artifacts are partly stochastic across offsets, so they
+    cancel under averaging, and high-N mixtures have the most of them. <b>If 3+ speakers is the
+    target and the real-time budget allows 4× inference, this is the one Tier 1 result worth
+    turning on</b> — <code>tier1_ensemble.py</code> implements it; it is off by default only
+    because the RTF tradeoff is a deployment call.</p>
+
+  <h3 style="margin:40px 0 6px;font-size:17px">Were the wins just a lucky sample?</h3>
+  <p class="ink2" style="margin:0 0 18px;max-width:74ch;font-size:14px">Every table above uses
+    <code>sorted(keys)[:100]</code> to stay comparable with the published baseline — but WSJ0-mix
+    keys lead with a speaker id, so that is <b>not a random sample</b>. Both shipped wins were
+    re-measured on a random draw. Both got <b>larger</b>.</p>
+  <div class="tbl-wrap"><table id="tbl-sampling"></table></div>
+  <div class="note crit"><b>The cautionary tale.</b> At n=25 the ensemble measured
+    <b>+0.204 dB with a deceptively tight ±0.030 CI</b> at N=2 — it looked like a clean win. At
+    n=100 it is <b>+0.042 ±0.241</b>, spanning zero. The small sample overestimated at
+    <i>every</i> count, by 0.10–0.28 dB, because the alphabetically-first mixtures are nearly one
+    speaker session. <b>A tight CI at small n is not evidence of a real effect</b> — it can mean
+    the sample was homogeneous. The absolute baseline shifts between subsets too (N=2: 23.39
+    sorted vs 23.98 random); the <i>paired deltas</i> are what transfer.</div>
+</div></section>
+
+<section id="bleed"><div class="wrap">
+  <div class="sec-head">
+    <h2>What the residual error actually is</h2>
+    <p>The audible imperfection in a separated stream sounds like bleed from the other talkers.
+      It measured as something else: <b>processing artifacts</b>. BSS_Eval splits the error into
+      interference (SIR) and artifacts (SAR) — and SIR runs 4–11 dB above SAR at every count.</p>
+  </div>
+  <div class="grid2">
+    <div class="chart">
+      <h3>SIR ≫ SAR at every speaker count</h3>
+      <div class="csub">WSJ0-mix, in domain. Absolute BSS_Eval values — not improvements.</div>
+      <div class="legend"><span><i style="background:var(--s1)"></i>SDR (overall)</span>
+        <span><i style="background:var(--s2)"></i>SIR (interference)</span>
+        <span><i style="background:var(--s3)"></i>SAR (artifacts)</span></div>
+      <div id="chart-bleed"></div>
+    </div>
+    <div class="chart">
+      <h3>Attractor collapse — a real minority tail</h3>
+      <div class="csub">Share of mixtures where two streams latched onto one speaker (|corr| &gt; 0.5).</div>
+      <div id="chart-collapse"></div>
+    </div>
+  </div>
+  <div class="note warn"><b>Two things this rules out, and one it doesn't — all sharper at 3+.</b>
+    Real cross-talker leakage would put SIR at 16–18 dB; in domain it is 23–35 dB, so a second
+    stage that re-separates jointly would attack a problem that is not the bottleneck. The
+    SIR−SAR margin does shrink as speakers pile up (+10.3 → +8.5 → +7.2 dB at 3/4/5), so
+    interference matters <i>more</i> at high counts — but it never overtakes artifacts anywhere in
+    range. And attractor collapse averages |corr| 0.009–0.108, far under threshold — <b>but it is
+    not zero, and it is concentrated exactly where this project lives</b>: 1% of 4-speaker and 4%
+    of 5-speaker mixtures. That tail should not be rounded away.</div>
+  <div class="tbl-wrap" style="margin-top:16px"><table id="tbl-bleed"></table></div>
+</div></section>
+
+<section id="counting"><div class="wrap">
+  <div class="sec-head">
+    <h2>How many people are talking?</h2>
+    <p>In domain the built-in counter is 98–100% and needs no help. Out of domain it degrades, and
+      <b>it degrades worst exactly where it matters</b>: 64.6% at 3 speakers and 59.6% at 4, versus
+      73.2% at 2. But it degrades in <b>exactly one direction</b>, and that shape decides the whole
+      design.</p>
+  </div>
+  <div class="grid2">
+    <div class="chart">
+      <h3>The counter never under-predicts</h3>
+      <div class="csub">LibriSpeech dev-clean (out of domain), 500 mixtures/count. Row = truth, column = prediction, % of row.</div>
+      <div id="chart-confusion"></div>
+    </div>
+    <div class="chart">
+      <h3>Track A pruning: +18 points where it counts</h3>
+      <div class="csub">Accuracy on identical mixtures. Compare N=2/3/4 only — see below.</div>
+      <div class="legend"><span><i style="background:var(--s1)"></i>Built-in counter</span>
+        <span><i style="background:var(--s2)"></i>Track A (prune at n_spks=5)</span></div>
+      <div id="chart-tracka"></div>
+    </div>
+  </div>
+  <div class="note"><b>The confusion matrix is strictly upper-triangular</b> — 0.0% below the
+    diagonal over 2000 mixtures. Every error is an over-prediction. That has a useful consequence:
+    a predicted 2 implies a true 2, so the N=2 routing win is safe to apply even out of domain,
+    where raw N=2 counting accuracy is only 73%.</div>
+  <div class="note warn"><b>Both N=5 numbers are artifacts, in opposite directions.</b> The
+    built-in cannot emit more than 5 and never guesses low, so its ~100% at N=5 is free — it makes
+    zero correct decisions to earn it. Track A can err both ways, so its 85.3% is the honest
+    number. The like-for-like comparison is N=2/3/4: built-in <b>67.0%</b> vs Track A
+    <b>85.1%</b>.</div>
+  <div class="tbl-wrap" style="margin-top:16px"><table id="tbl-gaps"></table></div>
+  <div class="note crit"><b>Which counter ships is unresolved, and it is not a tuning question.</b>
+    It depends on what the judge does with a wrong stream count, and the two policies invert the
+    verdict. If extra streams are ignored, over-predicting is nearly free (0.09 dB at N=4 despite
+    being wrong 40% of the time — the spare stream is junk sitting beside cleanly separated
+    speakers) and the built-in wins outright. If the judge wants exactly N, Track A halves the
+    gap. Under the lenient policy Track A is <i>worse</i>, because pruning introduces
+    under-prediction the built-in never commits — and dropping a real speaker is the expensive
+    error.</div>
+</div></section>
+
+<section id="method"><div class="wrap">
+  <div class="sec-head">
+    <h2>Method, and what is not proven</h2>
+    <p>Reported the way it was measured — including the parts that failed.</p>
+  </div>
+  <div class="cards">
+    <div class="card">
+      <h3><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="#0ca30c" stroke-width="2"><path d="M3 8.5l3.5 3.5L13 4"/></svg>Verified</h3>
+      <ul>
+        <li><b>Metric harness</b>: null baseline (estimate = mixture) scores exactly 0.0000 dB;
+          oracle scores 129.9 dB. Uses the authors' <code>PIT_SISNRi</code>, not a reimplementation.</li>
+        <li><b>Mixtures are faithful</b>: max|mix − Σsources| = 6.1e−05, exactly int16 quantization.</li>
+        <li><b>Cross-checked</b> between two independent harnesses (18.45 dB both).</li>
+        <li><b>Counting</b> measured on a held-out speaker split — Track A's thresholds were tuned
+          on split A only and evaluated once on split B (test gap 2.25 vs val 2.24: no overfit).</li>
+        <li><b>End-to-end through the shipping path</b>, not just in cache: 22.99 dB default vs
+          23.99 dB with <code>--route --mc</code> on the same mixtures.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="#fab219" stroke-width="2"><path d="M8 1.5L15 14H1z"/><path d="M8 6v3.5"/><path d="M8 11.5v.5"/></svg>Open risks</h3>
+      <ul>
+        <li><b>8 kHz is the biggest one.</b> Output is band-limited to 4 kHz and no 16 kHz
+          checkpoint exists. If the evaluation scores against 16 kHz references, that costs real
+          dB no matter how good separation is.</li>
+        <li><b>Long-form audio is untested.</b> Training length is 4 s; all benchmarking used ~5 s
+          clips. There is no chunking in the model — verified by reading the source — so nothing
+          gets scrambled, but quality on long input is unmeasured.</li>
+        <li><b>n = 100 per count</b>, not the full 3000 (standard error ≈ ±0.15–0.40 dB). Ample to
+          rank; do not read the third digit.</li>
+        <li><b>The routing win is WSJ0-only</b> and untested out of domain.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="note"><b>In domain vs. out of domain is not a footnote.</b> WSJ0 is the corpus the
+    model trained on; LibriSpeech mixtures are built from a corpus it has never seen. Quoting an
+    out-of-domain number as if it were in-domain has already produced one false conclusion in this
+    project (18.61 dB read as a 3-speaker deficit, when the in-domain figure is 23.84 and matches
+    the paper). Every number on this page is labelled with its corpus.</div>
+
+  <h3 style="margin:34px 0 12px;font-size:15px">Reproduce</h3>
+  <pre><span class="cm"># the venv is the only python with torch here</span>
+PY=SR_CorrNet_SS/.venv/Scripts/python.exe
+
+<span class="cm"># the headline table (also the resume command — reruns skip finished work)</span>
+$PY benchmark.py --root data/wsj0_kmix --limit 100
+$PY benchmark.py --root data/wsj0_kmix --limit 100 --route --mc  <span class="cm"># +1.00 dB at N=2</span>
+
+<span class="cm"># separate any file — count inferred, routing + mixture consistency on by default</span>
+$PY separate.py input.wav -o output/
+
+<span class="cm"># rebuild this page's data from the caches (CPU, ~1 min)</span>
+$PY build_demo_data.py
+$PY -m http.server 8000   <span class="cm"># then open http://localhost:8000/</span></pre>
+  <p class="hint">Every figure on this page is generated by <code>build_demo_data.py</code> from
+    the same cached artifacts the <code>results_*.md</code> reports read — there is no hand-typed
+    number here, so the page cannot drift from the measurements.</p>
+</div></section>
+
+<footer><div class="wrap">
+  <span id="foot"></span>
+</div></footer>
+
+<div id="tip"></div>
+<script src="demo_data.js"></script>
+<script>
+const D = window.DEMO, $ = s => document.querySelector(s);
+const SC = ['var(--s1)','var(--s2)','var(--s3)','var(--s4)','var(--s5)'];
+const SCHEX = ['#3987e5','#008300','#d55181','#c98500','#199e70'];
+const fmt = (x,d=2) => (x>0?'+':'') + x.toFixed(d);
+/* This project targets 3+ concurrent speakers. 2 stays visible as the baseline it is --
+   dropping it would hide the trend -- but it never leads and it is never the default. */
+const FOCUS = [3,4,5];
+const isFocus = n => FOCUS.includes(n);
+
+/* ============================ hero ============================ */
+$('#chips').innerHTML = [
+  ['Model', D.meta.model.split('/')[1]],
+  ['Checkpoints', 'one, covering 2–5'],
+  ['Training', 'none — download and run'],
+  ['Speed', '10–20× realtime'],
+].map(([k,v])=>`<span class="chip">${k} <b>${v}</b></span>`).join('');
+
+$('#tiles').innerHTML = [...D.headline.filter(r=>isFocus(r.n)), ...D.headline.filter(r=>!isFocus(r.n))]
+  .map(r=>`<div class="tile${isFocus(r.n)?'':' baseline'}">
+  <div class="k">${r.n} speakers${isFocus(r.n)?'':' · baseline'}</div>
+  <div class="v">${r.sisnri.toFixed(1)}<small>dB</small></div>
+  <div class="sub">SI-SNRi · ${r.count_acc}% counted right</div></div>`).join('');
+
+$('#foot').innerHTML = `${D.meta.n_samples} listening samples · ${D.meta.sr/1000} kHz mono ·
+  model <a href="${D.meta.hf_url}">${D.meta.model}</a> ·
+  paper <a href="${D.meta.paper_url}">arXiv:2603.29097</a> ·
+  page data generated by <code>build_demo_data.py</code>`;
+
+/* ============================ tooltip ============================ */
+const tip = $('#tip');
+function showTip(e, html){ tip.innerHTML = html; tip.style.opacity = 1;
+  const r = tip.getBoundingClientRect();
+  tip.style.left = Math.min(e.clientX + 14, innerWidth - r.width - 8) + 'px';
+  tip.style.top  = Math.max(e.clientY - r.height - 12, 8) + 'px'; }
+function hideTip(){ tip.style.opacity = 0; }
+
+/* ============================ svg chart helpers ============================ */
+const NS = 'http://www.w3.org/2000/svg';
+function svg(w,h){ const s=document.createElementNS(NS,'svg');
+  s.setAttribute('viewBox',`0 0 ${w} ${h}`); s.setAttribute('preserveAspectRatio','xMidYMid meet');
+  return s; }
+function el(p,t,a,txt){ const n=document.createElementNS(NS,t);
+  for(const k in a) n.setAttribute(k,a[k]); if(txt!=null) n.textContent=txt; p.appendChild(n); return n; }
+/** A bar with only its data-end rounded, anchored flat to the baseline. */
+function barPath(x,y,w,h,r){ r=Math.min(r,w/2,h); if(h<=0) return '';
+  return `M${x},${y+h} L${x},${y+r} Q${x},${y} ${x+r},${y} L${x+w-r},${y} Q${x+w},${y} ${x+w},${y+r} L${x+w},${y+h} Z`; }
+function hbarPath(x,y,w,h,r,dir){ r=Math.min(r,h/2,Math.abs(w));
+  if(dir>0) return `M${x},${y} L${x+w-r},${y} Q${x+w},${y} ${x+w},${y+r} L${x+w},${y+h-r} Q${x+w},${y+h} ${x+w-r},${y+h} L${x},${y+h} Z`;
+  return `M${x},${y} L${x-w+r},${y} Q${x-w},${y} ${x-w},${y+r} L${x-w},${y+h-r} Q${x-w},${y+h} ${x-w+r},${y+h} L${x},${y+h} Z`; }
+const AX={fill:'#898781','font-size':'11','font-family':'var(--sans)'};
+
+/* grouped vertical bars. Zero is always on the scale; a negative value draws downward from
+   it rather than vanishing (an invisible bar reads as "no data", not as "slightly negative"). */
+function groupedBars(mount, cats, series, opts={}){
+  if(!mount) return;   // the published cut omits some mounts; render what exists
+  const W=520,H=opts.h||250, P={t:14,r:10,b:34,l:opts.l??40};
+  const s=svg(W,H); const iw=W-P.l-P.r, ih=H-P.t-P.b;
+  const all=series.flatMap(x=>x.values).filter(v=>v!=null);
+  const max=opts.max ?? Math.max(...all)*1.12;
+  /* Reserve a floor under zero whenever anything is negative, even by a hair: otherwise a
+     -0.003 bar gets ~1px of room and its label lands on top of the category label. */
+  const anyNeg=all.some(v=>v<0);
+  const min=anyNeg ? Math.min(Math.min(...all)*1.25, -max*0.09) : 0;
+  const y=v=>P.t+ih-((v-min)/(max-min))*ih;
+  (opts.ticks||[0,10,20,30]).filter(t=>t<=max&&t>=min).forEach(t=>{
+    el(s,'line',{x1:P.l,x2:W-P.r,y1:y(t),y2:y(t),stroke:t===0?'var(--axis)':'var(--grid)','stroke-width':1});
+    el(s,'text',{x:P.l-8,y:y(t)+4,'text-anchor':'end',...AX},t); });
+  const gw=iw/cats.length, bw=Math.min(26,(gw-14)/series.length);
+  cats.forEach((c,ci)=>{
+    const gx=P.l+ci*gw+(gw-bw*series.length-2*(series.length-1))/2;
+    /* The 2-speaker group is context, not the subject: keep it on the same scale (dropping it
+       would hide the trend) but recede it so the eye lands on 3/4/5. Every grouped chart here
+       is indexed by speaker count, so this is the default; pass dimCats:[] to opt out. */
+    const dimmed=(opts.dimCats ?? ['2 spk']).includes(c);
+    series.forEach((se,si)=>{
+      const v=se.values[ci]; if(v==null) return;
+      const x=gx+si*(bw+2), up=v>=0;
+      const h=Math.abs(y(v)-y(0)), top=up?y(v):y(0);
+      const p=el(s,'path',{d:up?barPath(x,top,bw,h,4):barPath(x,top,bw,h,0),fill:se.color,
+        'fill-opacity':dimmed?0.32:1});
+      p.addEventListener('mousemove',e=>showTip(e,`<b>${se.name}</b><br>${opts.xlab||''} ${c} · <b>${v.toFixed(opts.tipdp??2)}</b> ${opts.unit||'dB'}`));
+      p.addEventListener('mouseleave',hideTip);
+      if(opts.label!==false) el(s,'text',{x:x+bw/2,y:up?y(v)-6:y(v)+12,'text-anchor':'middle',
+        fill:dimmed?'var(--muted)':'var(--ink-2)','font-size':'10','font-family':'var(--mono)'},
+        v.toFixed(opts.dp??1));
+    });
+    el(s,'text',{x:P.l+ci*gw+gw/2,y:H-12,'text-anchor':'middle',...AX},c);
+  });
+  mount.innerHTML=''; mount.appendChild(s);
+}
+
+/* ============================ charts ============================ */
+const counts = D.headline.map(r=>r.n);
+groupedBars($('#chart-headline'), counts.map(n=>n+' spk'), [
+  {name:'SR-CorrNet (measured)', color:SCHEX[0], values:D.headline.map(r=>r.sisnri)},
+  {name:'SepTDA (paper)', color:SCHEX[1], values:D.headline.map(r=>r.septda)},
+], {max:28, ticks:[0,10,20], unit:'dB SI-SNRi'});
+
+groupedBars($('#chart-unknown'), counts.map(n=>n+' spk'), [
+  {name:'SR-CorrNet, count inferred', color:SCHEX[0], values:D.headline.map(r=>r.sisnri)},
+  {name:'SepTDA, count unknown', color:SCHEX[1], values:D.headline.map(r=>r.septda_unknown)},
+], {max:28, ticks:[0,10,20], unit:'dB SI-SNRi'});
+
+/* routing: diverging horizontal bars with 95% CI whiskers.
+   Δ values live in a fixed right gutter rather than beside the bar end — floating them next
+   to a variable-length bar collides with both the row label and the whisker. */
+(function(){
+  if(!$('#chart-routing')) return;
+  /* Focus-first: at 3+ speakers there is exactly one checkpoint to route to and it loses, so
+     that row leads. The N=2 rows stay (they are why the shipped rule exists) but recede. */
+  const rows = [...D.tier1.routing].sort((a,b)=>(isFocus(b.n)?1:0)-(isFocus(a.n)?1:0));
+  const W=520, rh=44, P={t:10,r:86,b:28,l:128}, H=P.t+rows.length*rh+P.b;
+  const s=svg(W,H), iw=W-P.l-P.r;
+  const m=Math.max(...rows.map(r=>Math.abs(r.delta)+r.ci))*1.12;
+  const x=v=>P.l+iw/2+(v/m)*(iw/2);
+  [-2,-1,0,1].forEach(t=>{
+    if(Math.abs(t)>m) return;
+    el(s,'line',{x1:x(t),x2:x(t),y1:P.t,y2:P.t+rows.length*rh,
+      stroke:t===0?'var(--axis)':'var(--grid)','stroke-width':1});
+    el(s,'text',{x:x(t),y:H-10,'text-anchor':'middle',...AX,
+      fill:t===0?'var(--ink-2)':'#898781'},t===0?'0':t);
+  });
+  el(s,'text',{x:P.l+iw/2,y:H-1,'text-anchor':'middle',...AX,'font-size':'9.5'},'paired Δ (dB)');
+  rows.forEach((r,i)=>{
+    const y0=P.t+i*rh+11, bh=16, pos=r.delta>0, col=pos?'var(--pos)':'var(--neg)';
+    const dimmed=!isFocus(r.n);
+    el(s,'text',{x:P.l-12,y:y0+12,'text-anchor':'end',
+      fill:dimmed?'var(--muted)':'var(--ink-2)','font-size':'11',
+      'font-family':'var(--mono)'},`N=${r.n} ${r.challenger}`);
+    const w=Math.abs(x(r.delta)-x(0));
+    const p=el(s,'path',{d:hbarPath(x(0),y0,w,bh,4,pos?1:-1),fill:col,
+      'fill-opacity':dimmed?0.32:1});
+    p.addEventListener('mousemove',e=>showTip(e,`<b>${r.challenger}</b> at N=${r.n}<br>
+      ${r.a.toFixed(2)} → ${r.b.toFixed(2)} dB<br>paired Δ <b>${fmt(r.delta,3)}</b> ±${r.ci.toFixed(3)}
+      · p ${r.p<0.001?'<0.001':r.p.toFixed(3)} · n=${r.n_mix} mixtures`));
+    p.addEventListener('mouseleave',hideTip);
+    const a=x(r.delta-r.ci), b=x(r.delta+r.ci), yc=y0+bh/2;
+    el(s,'line',{x1:a,x2:b,y1:yc,y2:yc,stroke:'var(--ink)','stroke-width':1.5,opacity:.5});
+    [a,b].forEach(xx=>el(s,'line',{x1:xx,x2:xx,y1:yc-4,y2:yc+4,stroke:'var(--ink)','stroke-width':1.5,opacity:.5}));
+    el(s,'text',{x:W-P.r+8,y:y0+12,fill:col,'font-size':'11.5','font-family':'var(--mono)',
+      'font-weight':'600','fill-opacity':dimmed?0.5:1},fmt(r.delta,2));
+    if(r.shipped) el(s,'text',{x:W-P.r+8,y:y0-1,fill:'var(--good)','font-size':'8.5',
+      'font-family':'var(--sans)','font-weight':'700','letter-spacing':'.05em',
+      'fill-opacity':dimmed?0.5:1},'SHIPPED');
+    if(isFocus(r.n)) el(s,'text',{x:W-P.r+8,y:y0-1,fill:'var(--neg)','font-size':'8.5',
+      'font-family':'var(--sans)','font-weight':'700','letter-spacing':'.05em'},'ONLY 3+ OPTION');
+  });
+  $('#chart-routing').appendChild(s);
+})();
+
+/* out of domain vs in domain */
+groupedBars($('#chart-oob'), D.out_of_domain.map(r=>r.n+' spk'), [
+  {name:'WSJ0-mix (in domain)', color:SCHEX[0], values:D.headline.map(r=>r.sisnri)},
+  {name:'LibriSpeech (out of domain)', color:SCHEX[3], values:D.out_of_domain.map(r=>r.oracle)},
+], {max:28, ticks:[0,10,20], unit:'dB SI-SNRi'});
+
+/* ensembling: MC vs ens vs both */
+groupedBars($('#chart-ens'), D.tier1.ensemble.map(r=>r.n+' spk'), [
+  {name:'Mixture consistency (free)', color:SCHEX[0],
+   values:counts.map(n=>D.tier1.mc.find(m=>m.domain==='in'&&m.n===n).delta)},
+  {name:'Ensembling alone (4×)', color:SCHEX[1], values:D.tier1.ensemble.map(r=>r.delta)},
+  {name:'Both stacked', color:SCHEX[2], values:D.tier1.ensemble.map(r=>r.delta_ensmc)},
+], {max:.62, ticks:[0,.25,.5], dp:2, unit:'dB', h:250, l:34});
+
+/* what ensembling buys over free MC — the deciding column */
+groupedBars($('#chart-ensover'), D.tier1.ensemble.map(r=>r.n+' spk'), [
+  {name:'Gain over MC alone', color:SCHEX[2],
+   values:D.tier1.ensemble.map(r=>r.delta_ensmc - D.tier1.mc.find(m=>m.domain==='in'&&m.n===r.n).delta)},
+], {max:.5, ticks:[0,.25,.5], dp:2, unit:'dB for 4× inference', h:250, l:34});
+$('#chart-ensover')?.insertAdjacentHTML('afterend',
+  `<p class="muted" style="font-size:12px;margin:10px 0 0">At 2 speakers this is negative —
+   ensembling is <i>worse than doing nothing extra</i>. Nothing to buy.</p>`);
+
+/* mixture consistency: in vs out of domain */
+groupedBars($('#chart-mc'), counts.map(n=>n+' spk'), [
+  {name:'WSJ0 (in domain)', color:SCHEX[0], values:D.tier1.mc.filter(r=>r.domain==='in').map(r=>r.delta)},
+  {name:'LibriSpeech (out of domain)', color:SCHEX[3], values:D.tier1.mc.filter(r=>r.domain==='out').map(r=>r.delta)},
+], {max:.5, ticks:[0,.25,.5], dp:2, unit:'dB', h:230, l:34});
+
+/* bleed */
+groupedBars($('#chart-bleed'), D.bleed.wsj0.map(r=>r.n+' spk'), [
+  {name:'SDR', color:SCHEX[0], values:D.bleed.wsj0.map(r=>r.sdr)},
+  {name:'SIR', color:SCHEX[1], values:D.bleed.wsj0.map(r=>r.sir)},
+  {name:'SAR', color:SCHEX[2], values:D.bleed.wsj0.map(r=>r.sar)},
+], {max:40, ticks:[0,10,20,30], unit:'dB (absolute)'});
+
+/* collapse tail */
+groupedBars($('#chart-collapse'), D.bleed.wsj0.map(r=>r.n+' spk'), [
+  {name:'WSJ0 (in domain)', color:SCHEX[0], values:D.bleed.wsj0.map(r=>r.pct_collapse)},
+  {name:'LibriSpeech (out of domain)', color:SCHEX[3], values:D.bleed.libri.map(r=>r.pct_collapse)},
+], {max:5, ticks:[0,2,4], dp:1, unit:'% of mixtures', h:250});
+$('#chart-collapse')?.insertAdjacentHTML('beforebegin',
+  `<div class="legend"><span><i style="background:var(--s1)"></i>WSJ0 (in domain)</span>
+   <span><i style="background:var(--s4)"></i>LibriSpeech (out of domain)</span></div>`);
+
+/* confusion heatmap — sequential blue ramp (one hue, light→dark) */
+(function(){
+  if(!$('#chart-confusion')) return;
+  const C=D.counting.confusion, W=520, cell=52, P={t:34,l:66,r:14,b:30};
+  const H=P.t+C.length*cell+P.b;
+  const s=svg(W,H);
+  const ramp=['#0d366b','#104281','#184f95','#1c5cab','#256abf','#2a78d6','#3987e5','#5598e7','#6da7ec','#86b6ef','#9ec5f4','#b7d3f6','#cde2fb'];
+  const col=v=>v<=0?'var(--surface-2)':ramp[Math.min(ramp.length-1,Math.floor((1-v/100)*ramp.length))];
+  counts.forEach((n,j)=>el(s,'text',{x:P.l+j*cell+cell/2,y:P.t-12,'text-anchor':'middle',...AX},'→'+n));
+  el(s,'text',{x:P.l+counts.length*cell/2,y:14,'text-anchor':'middle',...AX,'font-size':'10'},'PREDICTED COUNT');
+  C.forEach((r,i)=>{
+    el(s,'text',{x:P.l-10,y:P.t+i*cell+cell/2+4,'text-anchor':'end',...AX,fill:'var(--ink-2)'},'N='+r.true_n);
+    r.row.forEach((v,j)=>{
+      const x=P.l+j*cell, y=P.t+i*cell;
+      /* 2px surface gap between cells */
+      const c=el(s,'rect',{x:x+1,y:y+1,width:cell-2,height:cell-2,rx:4,fill:col(v),
+        stroke:i===j?'var(--ink)':'none','stroke-width':i===j?1.5:0,'stroke-opacity':.5});
+      c.addEventListener('mousemove',e=>showTip(e,`true <b>${r.true_n}</b> → predicted <b>${counts[j]}</b><br>
+        <b>${v.toFixed(1)}%</b> of ${r.n_mix} mixtures${j<i?'<br><span style="color:#0ca30c">never happens</span>':''}`));
+      c.addEventListener('mouseleave',hideTip);
+      /* The ramp darkens with magnitude, so ink must lighten with it: a dark cell takes white
+         text, a near-surface cell takes dark text. Getting this backwards makes the two cells
+         that matter most — the diagonal and the near-zero tail — the two least readable. */
+      if(v>0.05) el(s,'text',{x:x+cell/2,y:y+cell/2+4,'text-anchor':'middle',
+        fill:v>45?'#ffffff':'#0b0b0b','font-size':'11.5','font-family':'var(--mono)',
+        'font-weight':i===j?'700':'400'},v.toFixed(1));
+    });
+    el(s,'text',{x:P.l+counts.length*cell+8,y:P.t+i*cell+cell/2+4,fill:'var(--muted)',
+      'font-size':'10','font-family':'var(--mono)'},(r.mean_pred-r.true_n>=0?'+':'')+(r.mean_pred-r.true_n).toFixed(2));
+  });
+  el(s,'text',{x:P.l+counts.length*cell+8,y:P.t-12,fill:'var(--muted)','font-size':'9','font-family':'var(--sans)'},'bias');
+  el(s,'text',{x:P.l,y:H-8,...AX,'font-size':'10'},'Everything below the diagonal is 0.0% — it only ever over-predicts.');
+  $('#chart-confusion').appendChild(s);
+})();
+
+/* track A accuracy */
+groupedBars($('#chart-tracka'), D.counting.track_a.map(r=>r.n+' spk'), [
+  {name:'Built-in', color:SCHEX[0], values:D.counting.track_a.map(r=>r.builtin)},
+  {name:'Track A', color:SCHEX[1], values:D.counting.track_a.map(r=>r.track_a)},
+], {max:118, ticks:[0,50,100], dp:1, unit:'% correct'});
+
+/* ============================ tables ============================ */
+function table(node, cols, rows){
+  if(!node) return;
+  node.innerHTML = `<thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(r=>`<tr>${r.map(c=>typeof c==='object'
+      ? `<td class="${c.cls||''}">${c.v}</td>` : `<td class="num">${c}</td>`).join('')}</tr>`).join('')}</tbody>`;
+}
+table($('#tbl-headline'),
+  ['Speakers','Mixtures','SI-SNRi (dB)','sd','SepTDA, known N','Count accuracy','RTF'],
+  D.headline.map(r=>[{v:`<b>${r.n} speakers</b>`},r.mixes,
+    {v:`<b>${r.sisnri.toFixed(2)}</b>`,cls:'num'},r.sd.toFixed(2),r.septda.toFixed(1),
+    r.count_acc.toFixed(1)+'%',r.rtf.toFixed(3)]));
+
+/* Deliberately narrow: this table sits in a half-width column, and count accuracy has its
+   own section below. Six columns here clipped rather than informed. */
+table($('#tbl-oob'),
+  ['Speakers','Mixtures','Out of domain','In domain','Corpus gap'],
+  D.out_of_domain.map(r=>{
+    const inn = D.headline.find(h=>h.n===r.n).sisnri;
+    return [{v:`<b>${r.n} spk</b>`}, r.mixes, {v:`<b>${r.oracle.toFixed(2)}</b>`,cls:'num'},
+      inn.toFixed(2), {v:'−'+(inn-r.oracle).toFixed(2),cls:'num'}];
+  }));
+
+table($('#tbl-routing'),
+  ['Challenger checkpoint','N','General','Challenger','Paired Δ (dB)','95% CI','p','Mixtures'],
+  D.tier1.routing.map(r=>[
+    {v:`<code>${r.challenger}</code>${r.shipped?'<span class="tag ship">SHIPPED</span>':''}`},
+    r.n, r.a.toFixed(2), r.b.toFixed(2),
+    {v:fmt(r.delta,3),cls:'num '+(r.delta>0?'win':'lose')},
+    '±'+r.ci.toFixed(3), r.p<0.001?'<0.001':r.p.toFixed(3), r.n_mix]));
+
+table($('#tbl-sampling'),
+  ['Measurement','Sorted prefix (default)','Random sample (--seed 1234)','Verdict'],
+  [...D.tier1.sampling.map(r=>[{v:r.what},
+    {v:`${fmt(r.sorted,3)} <span class="muted">±${r.sorted_ci.toFixed(3)}</span>`,cls:'num'},
+    {v:`<b>${fmt(r.random,3)}</b> <span class="muted">±${r.random_ci.toFixed(3)}</span>`,cls:'num'},
+    {v:r.random>r.sorted?'<span class="win">larger — holds</span>':'<span class="muted">smaller</span>'}]),
+   ...D.tier1.baselines.map(b=>[{v:`<span class="muted">absolute baseline @ N=${b.n} (not a delta)</span>`},
+    {v:b.sorted.toFixed(2),cls:'num'},{v:b.random.toFixed(2),cls:'num'},
+    {v:'<span class="muted">subset-dependent</span>'}])]);
+
+table($('#tbl-ens'),
+  ['Offset ensembling (4× inference)','Single','Ensemble','Δ ensemble','95% CI','Ens + MC','Δ over MC alone'],
+  D.tier1.ensemble.map(r=>{
+    const mc = D.tier1.mc.find(m=>m.domain==='in'&&m.n===r.n).delta;
+    const over = r.delta_ensmc - mc;
+    return [{v:`<b>${r.n} speakers</b>`}, r.single.toFixed(2), r.ens.toFixed(2),
+      {v:fmt(r.delta,3),cls:'num'}, '±'+r.ci.toFixed(3), r.ensmc.toFixed(2),
+      {v:over<0.05?`${fmt(over,2)} <span class="muted">— not worth it</span>`:fmt(over,2),
+       cls:'num '+(over<0.05?'':'win')}];
+  }));
+
+table($('#tbl-bleed'),
+  ['Corpus','N','Mixtures','SDR','SIR','SAR','SIR − SAR','mean max-corr','Collapse rate'],
+  [...D.bleed.wsj0.map(r=>['wsj0',r]), ...D.bleed.libri.map(r=>['libri',r])].map(([ds,r])=>[
+    {v:ds==='wsj0'?'<span class="badge dom-in">WSJ0 · in domain</span>'
+                  :'<span class="badge dom-out">LibriSpeech · out of domain</span>'},
+    r.n, r.mixes, r.sdr.toFixed(2), r.sir.toFixed(2), r.sar.toFixed(2),
+    {v:`<b>+${r.gap.toFixed(1)}</b>`,cls:'num'}, r.corr.toFixed(3), r.pct_collapse.toFixed(1)+'%']));
+
+table($('#tbl-gaps'),
+  ['End-to-end SI-SNRi gap vs oracle count','Lenient: built-in','Lenient: Track A','Strict: built-in','Strict: Track A'],
+  [...D.counting.gaps.map(g=>[{v:`<b>${g.n} speakers</b>`},
+      {v:g.lenient_builtin.toFixed(2),cls:'num '+(g.lenient_builtin<g.lenient_tracka?'win':'')},
+      {v:g.lenient_tracka.toFixed(2),cls:'num '+(g.lenient_tracka<g.lenient_builtin?'win':'')},
+      {v:g.strict_builtin.toFixed(2),cls:'num '+(g.strict_builtin<g.strict_tracka?'win':'')},
+      {v:g.strict_tracka.toFixed(2),cls:'num '+(g.strict_tracka<g.strict_builtin?'win':'')}]),
+   [{v:'<b>Mean gap — lower is better</b>'},
+    {v:`<b>${D.counting.mean_gap.lenient_builtin.toFixed(2)}</b>`,cls:'num win'},
+    {v:D.counting.mean_gap.lenient_tracka.toFixed(2),cls:'num'},
+    {v:D.counting.mean_gap.strict_builtin.toFixed(2),cls:'num'},
+    {v:`<b>${D.counting.mean_gap.strict_tracka.toFixed(2)}</b>`,cls:'num win'}],
+   [{v:'<b>Winner</b>'},{v:'<b class="win">Built-in</b>',cls:''},{v:''},{v:''},{v:'<b class="win">Track A</b>',cls:''}]]);
+
+/* ============================ player ============================ */
+/* Derived from the data, not hardcoded: the published cut embeds fewer corpora, and a toggle
+   for a corpus with no samples is a dead control. */
+const DS = [{id:'wsj0',label:'WSJ0-mix — in domain'},{id:'libri',label:'LibriSpeech — out of domain'}]
+  .filter(d=>D.samples.some(s=>s.dataset===d.id));
+const state = {ds:DS[0].id, n:3, key:null};
+const audio = new Audio(); audio.preload='auto';
+let cur = null;           // {url, canvas, env, color}
+const canvases = [];      // {canvas, env, color, url}
+
+function samples(){ return D.samples.filter(s=>s.dataset===state.ds && s.n===state.n); }
+function example(){ return samples().find(s=>s.key===state.key) || samples()[0]; }
+
+/* --- waveform rendering (envelopes are precomputed; nothing is decoded in the browser) ---
+   Envelope amplitudes are absolute and share one scale per example, so the mixture reads as
+   genuinely louder than its streams and quiet speakers stay quiet. Never rescale per stream. */
+const dim = (hex,a) => `rgba(${parseInt(hex.slice(1,3),16)},${parseInt(hex.slice(3,5),16)},${parseInt(hex.slice(5,7),16)},${a})`;
+function drawWave(c, env, color, progress){
+  const dpr = devicePixelRatio||1, W=c.clientWidth, H=c.clientHeight;
+  if(!W) return;
+  c.width=W*dpr; c.height=H*dpr;
+  const g=c.getContext('2d'); g.scale(dpr,dpr); g.clearRect(0,0,W,H);
+  const n=env.length, bw=W/n, mid=H/2;
+  const unplayed = dim(color,.34), played = color;
+  for(let i=0;i<n;i++){
+    const h=Math.max(1, env[i]*(H*0.92));
+    g.fillStyle = (i+0.5)/n <= progress ? played : unplayed;
+    g.fillRect(i*bw, mid-h/2, Math.max(bw-0.6,0.6), h);
+  }
+  if(progress>0 && progress<1){
+    g.fillStyle=color; g.fillRect(progress*W-0.75, 0, 1.5, H);
+  }
+}
+function redrawAll(progress){
+  canvases.forEach(o=>drawWave(o.canvas,o.env,o.color, cur && cur.canvas===o.canvas ? progress : 0));
+}
+function tick(){
+  if(cur && !audio.paused){
+    const p = audio.duration ? audio.currentTime/audio.duration : 0;
+    drawWave(cur.canvas, cur.env, cur.color, p);
+    requestAnimationFrame(tick);
+  }
+}
+audio.addEventListener('ended', ()=>{ redrawAll(0); cur=null; updatePlayIcons(); });
+audio.addEventListener('play', ()=>{ updatePlayIcons(); tick(); });
+audio.addEventListener('pause', ()=>updatePlayIcons());
+
+const ICON_PLAY = '<svg viewBox="0 0 12 12"><path d="M2 1l8 5-8 5z"/></svg>';
+const ICON_PAUSE = '<svg viewBox="0 0 12 12"><path d="M2 1h3v10H2zM7 1h3v10H7z"/></svg>';
+function updatePlayIcons(){
+  document.querySelectorAll('.play').forEach(b=>{
+    const on = cur && b.dataset.url===cur.url && !audio.paused;
+    b.innerHTML = on ? ICON_PAUSE : ICON_PLAY;
+  });
+}
+function play(o, seek){
+  const same = cur && cur.url===o.url;
+  cur = o;
+  if(!same){
+    const t = seek!=null ? seek : 0;
+    audio.src = encodeURI(o.url);
+    audio.currentTime = 0;
+    audio.addEventListener('loadedmetadata', function once(){
+      audio.removeEventListener('loadedmetadata', once);
+      if(t) audio.currentTime = t * (audio.duration||0);
+    });
+    redrawAll(0);
+  } else if(seek!=null && audio.duration){
+    audio.currentTime = seek*audio.duration;
+  }
+  audio.play();
+}
+/** Swap source but hold position — this is what makes A/B honest. */
+function swapKeepingPosition(o){
+  const frac = audio.duration ? audio.currentTime/audio.duration : 0;
+  const wasPlaying = !audio.paused;
+  cur = o;
+  audio.src = encodeURI(o.url);
+  audio.addEventListener('loadedmetadata', function once(){
+    audio.removeEventListener('loadedmetadata', once);
+    audio.currentTime = frac * (audio.duration||0);
+    if(wasPlaying) audio.play(); else drawWave(o.canvas,o.env,o.color,frac);
+  });
+}
+
+function renderStage(){
+  const ex = example(); if(!ex){ $('#stage').innerHTML=''; return; }
+  state.key = ex.key;
+  canvases.length = 0;
+  cur = null; audio.pause();
+
+  const inDom = ex.dataset==='wsj0';
+  const rows = ex.speakers.map((sp,i)=>`
+    <div class="track" data-spk="${i}">
+      <div class="tname"><button class="play" data-i="${i}">${ICON_PLAY}</button>
+        <span class="dot" style="background:${SC[i]}"></span>Speaker ${i+1}</div>
+      <canvas class="wave" data-i="${i}"></canvas>
+      <div class="tmeta">
+        <span class="db-badge">${fmt(sp.sisnri,1)} dB</span>
+        <span class="ab" data-i="${i}">
+          <button data-kind="est" aria-pressed="true">Separated</button>
+          <button data-kind="ref" aria-pressed="false">Reference</button>
+        </span>
+      </div>
+    </div>`).join('');
+
+  $('#stage').innerHTML = `
+    <div class="stage-top">
+      <span class="badge ${inDom?'dom-in':'dom-out'}">${inDom?'WSJ0 · in domain':'LibriSpeech · out of domain'}</span>
+      <span class="badge">${ex.n} speakers</span>
+      <span class="badge">mean ${fmt(ex.mean_sisnri,2)} dB SI-SNRi</span>
+      <span class="badge">${ex.seconds}s</span>
+      <span class="key">${ex.key}</span>
+    </div>
+    <div class="track mixrow">
+      <div class="tname"><button class="play" data-i="mix">${ICON_PLAY}</button>
+        <span class="dot" style="background:var(--mix)"></span>Mixture</div>
+      <canvas class="wave" data-i="mix"></canvas>
+      <div class="tmeta"><span class="db-badge muted">${ex.n} voices, 1 channel</span></div>
+    </div>
+    ${rows}`;
+
+  /* wire up: mixture */
+  const mixC = $('#stage canvas[data-i="mix"]');
+  const mixO = {url:ex.mix_url, canvas:mixC, env:ex.mix_env, color:'#c3c2b7'};
+  canvases.push(mixO);
+  $('#stage .play[data-i="mix"]').dataset.url = ex.mix_url;
+
+  /* wire up: each speaker, tracking which side of the A/B is showing */
+  const spkO = ex.speakers.map((sp,i)=>{
+    const c = $(`#stage canvas[data-i="${i}"]`);
+    const o = {url:sp.est_url, canvas:c, env:sp.est_env, color:SCHEX[i], kind:'est', sp};
+    canvases.push(o);
+    $(`#stage .play[data-i="${i}"]`).dataset.url = sp.est_url;
+    return o;
+  });
+  const objOf = i => i==='mix' ? mixO : spkO[+i];
+
+  $('#stage').querySelectorAll('.play').forEach(b=>b.addEventListener('click',()=>{
+    const o = objOf(b.dataset.i);
+    if(cur && cur.url===o.url && !audio.paused) audio.pause();
+    else play(o, cur && cur.url===o.url ? null : 0);
+  }));
+  $('#stage').querySelectorAll('canvas.wave').forEach(c=>c.addEventListener('click',e=>{
+    const o = objOf(c.dataset.i);
+    play(o, (e.clientX - c.getBoundingClientRect().left)/c.clientWidth);
+  }));
+  $('#stage').querySelectorAll('.ab').forEach(g=>{
+    g.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+      const i=+g.dataset.i, kind=b.dataset.kind, o=spkO[i];
+      if(o.kind===kind) return;
+      g.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed', x===b));
+      o.kind=kind;
+      o.url = kind==='est' ? o.sp.est_url : o.sp.ref_url;
+      o.env = kind==='est' ? o.sp.est_env : o.sp.ref_env;
+      o.color = kind==='est' ? SCHEX[i] : '#898781';
+      $(`#stage .play[data-i="${i}"]`).dataset.url = o.url;
+      const badge = $(`#stage .track[data-spk="${i}"] .db-badge`);
+      badge.textContent = kind==='est' ? fmt(o.sp.sisnri,1)+' dB' : 'ground truth';
+      badge.classList.toggle('muted', kind==='ref');
+      if(cur && cur.canvas===o.canvas) swapKeepingPosition(o);
+      else drawWave(o.canvas,o.env,o.color,0);
+    }));
+  });
+  requestAnimationFrame(()=>redrawAll(0));
+  updatePlayIcons();
+}
+
+function renderChooser(){
+  $('#ds-seg').innerHTML = DS.map(d=>
+    `<button data-ds="${d.id}" aria-pressed="${state.ds===d.id}">${d.label}</button>`).join('');
+  $('#ds-seg').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+    state.ds=b.dataset.ds; state.key=null; renderChooser(); }));
+
+  /* 3/4/5 lead; 2 is offered last and labelled, so the easy case can still be heard but
+     never presents itself as the point. */
+  const avail = new Set(D.samples.filter(s=>s.dataset===state.ds).map(s=>s.n));
+  const ns = [...FOCUS.filter(n=>avail.has(n)), ...[...avail].filter(n=>!isFocus(n)).sort()];
+  if(!ns.includes(state.n)) state.n = ns[0];
+  $('#n-seg').innerHTML = ns.map(n=>
+    `<button data-n="${n}" aria-pressed="${state.n===n}"${isFocus(n)?'':' class="baseline"'}>${
+      isFocus(n)?n:n+' · baseline'}</button>`).join('');
+  $('#n-seg').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+    state.n=+b.dataset.n; state.key=null; renderChooser(); }));
+
+  const ss = samples();
+  if(!state.key || !ss.some(s=>s.key===state.key)) state.key = ss[0]?.key;
+  $('#examples').innerHTML = ss.map((s,i)=>
+    `<button class="ex" data-key="${s.key}" aria-pressed="${s.key===state.key}">
+       #${String(i+1).padStart(2,'0')}<span class="db">${fmt(s.mean_sisnri,1)} dB</span></button>`).join('');
+  $('#examples').querySelectorAll('.ex').forEach(b=>b.addEventListener('click',()=>{
+    state.key=b.dataset.key; renderChooser(); }));
+
+  renderStage();
+}
+
+addEventListener('keydown',e=>{
+  if(e.code==='Space' && !/INPUT|TEXTAREA/.test(e.target.tagName)){
+    e.preventDefault();
+    if(!cur) play(canvases[0],0);
+    else if(audio.paused) audio.play(); else audio.pause();
+  }
+});
+let rt; addEventListener('resize',()=>{ clearTimeout(rt); rt=setTimeout(()=>{
+  const p = cur && audio.duration ? audio.currentTime/audio.duration : 0; redrawAll(p); },120); });
+
+renderChooser();
+</script>
+</body>
+</html>

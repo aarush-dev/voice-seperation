@@ -1,0 +1,60 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Corpora — huge, and WSJ0 is LDC-licensed (not ours to redistribute).
+# See README.md "Setup" for how to obtain and rebuild them.
+# ─────────────────────────────────────────────────────────────────────────────
+data/
+data_src/
+data_local/
+*.tgz
+*.tar.gz
+
+# ─────────────────────────────────────────────────────────────────────────────
+# WSJ0-derived audio. Mixtures and references ARE WSJ0 speech; the estimates are
+# derived works. Redistributing any of it would republish LDC93S6A.
+# ─────────────────────────────────────────────────────────────────────────────
+separated_wsj0/
+demo_out/
+demo_out_auto/
+artifact.html
+*.wav
+*.flac
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Vendored upstream clones. SR_CorrNet_SS has its own upstream git history and a
+# multi-GB venv; only our own patches are committed, under 6-speaker/.
+# README.md's Setup section says how to re-clone it.
+# ─────────────────────────────────────────────────────────────────────────────
+# Our four 6-speaker patches under 6-speaker/SR_CorrNet_SS/ are already tracked,
+# so this rule does not touch them -- it only stops a fresh upstream clone dropped
+# in either location from being committed wholesale.
+voice-seperation/SR_CorrNet_SS/
+6-speaker/SR_CorrNet_SS/
+tools/pywsj0-mix/
+tools/ffmpeg-*/
+tools/ffmpeg.zip
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Model weights and training output — regenerable, and far over GitHub's limits.
+# ─────────────────────────────────────────────────────────────────────────────
+*.pth
+*.ckpt
+*.pt
+exp/
+enroll_scp/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.venv-*/
+*.egg-info/
+
+# Run logs — noisy, and every result worth keeping is already in results_*.md
+*.log
+
+# Agent/editor scratch
+.claude/
+.cursor/
+.vscode/
+.idea/
+.DS_Store
